@@ -1,6 +1,6 @@
 """Measure prefill and decode speed at several prompt lengths through a running TabbyAPI.
 
-Usage: python bench/moe_context_bench.py LABEL [--contexts 2 8 16] [--repeats 3]
+Usage: python bench/moe_context_bench.py LABEL [--contexts 2 8 16 32] [--repeats 3]
 Appends one JSON record per request to logs/moe_context_bench.jsonl. Set MODEL_DIR to the model being served.
 """
 import argparse
@@ -26,8 +26,8 @@ INSTRUCTION = (
 def parse_args():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("label", help="label to group these measurements in the output")
-    parser.add_argument("--contexts", type=int, nargs="+", default=[2, 8, 16], metavar="K",
-                        help="prompt size targets in thousands of tokens (default: 2 8 16)")
+    parser.add_argument("--contexts", type=int, nargs="+", default=[2, 8, 16, 32], metavar="K",
+                        help="prompt size targets in thousands of tokens (default: 2 8 16 32)")
     parser.add_argument("--repeats", type=int, default=3, help="requests per context (default: 3)")
     parser.add_argument("--max-tokens", type=int, default=128, help="maximum generated tokens (default: 128)")
     parser.add_argument("--url", default=BASE_URL, help="OpenAI-compatible API base URL (default: %(default)s)")
@@ -75,6 +75,27 @@ def build_prompt(tokenizer, target_tokens, seed):
     return prompt, prompt_tokens
 
 
+def draft_metrics_from_usage(usage):
+    details = usage.get("completion_tokens_details", {}) if isinstance(usage, dict) else {}
+    accepted = details.get("accepted_prediction_tokens") if isinstance(details, dict) else None
+    rejected = details.get("rejected_prediction_tokens") if isinstance(details, dict) else None
+    if not isinstance(accepted, int) or not isinstance(rejected, int):
+        return {
+            "draft_tokens_accepted": None,
+            "draft_tokens_rejected": None,
+            "draft_tokens_total": None,
+            "draft_acceptance_pct": None,
+        }
+
+    total = accepted + rejected
+    return {
+        "draft_tokens_accepted": accepted,
+        "draft_tokens_rejected": rejected,
+        "draft_tokens_total": total,
+        "draft_acceptance_pct": round(100 * accepted / total, 1) if total else None,
+    }
+
+
 def timed_request(base_url, headers, prompt, max_tokens, timeout):
     body = {
         "model": "x",
@@ -82,6 +103,7 @@ def timed_request(base_url, headers, prompt, max_tokens, timeout):
         "max_tokens": max_tokens,
         "temperature": 0,
         "stream": True,
+        "stream_options": {"include_usage": True},
         "enable_thinking": False,
         "chat_template_kwargs": {"enable_thinking": False},
     }
@@ -90,12 +112,15 @@ def timed_request(base_url, headers, prompt, max_tokens, timeout):
     first_token_at = None
     output = ""
     finish_reason = None
+    draft_metrics = draft_metrics_from_usage(None)
     with urllib.request.urlopen(request, timeout=timeout) as response:
         for line in response:
             line = line.decode().strip()
             if not line.startswith("data:") or line == "data: [DONE]":
                 continue
             event = json.loads(line[5:])
+            if "usage" in event:
+                draft_metrics = draft_metrics_from_usage(event["usage"])
             if not event.get("choices"):
                 continue
             choice = event["choices"][0]
@@ -113,6 +138,7 @@ def timed_request(base_url, headers, prompt, max_tokens, timeout):
         "ttft_s": first_token_at - started,
         "decode_s": ended - first_token_at,
         "finish_reason": finish_reason,
+        **draft_metrics,
     }
 
 
@@ -140,6 +166,7 @@ def main():
                 "prompt_tokens": prompt_tokens,
                 "max_tokens": args.max_tokens,
                 "url": args.url.rstrip("/"),
+                **draft_metrics_from_usage(None),
             }
             try:
                 text, timing = timed_request(args.url, headers, prompt, args.max_tokens, timeout=1800)
