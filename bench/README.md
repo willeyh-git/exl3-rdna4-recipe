@@ -12,6 +12,7 @@ model's tokenizer (`models/Qwen3.8-27B-EXL3-SC3.0bpw-H4/tokenizer.json`, or `MOD
 | Script | What it does |
 |---|---|
 | `bench_api.py NAME [URL] [KEY]` | Greedy code (600 tokens), sampled prose (600 tokens), prefill at 8k and 30k. Engine-neutral: works against llama-server too. |
+| `moe_context_bench.py LABEL [--contexts 2 8 16] [--repeats 3]` | Prefill and decode speed at prompt targets of 2k, 8k, and 16k by default. Appends one JSONL record per request to `logs/moe_context_bench.jsonl`; set `MODEL_DIR` to the served model. |
 | `context_bench.py LABEL 8 32 60 ...` | Decode speed and recall by depth: a fresh filler document per depth with a code buried mid-way, then ~450 tokens of Python. This is the decode-by-depth table. |
 | `ctx_probe.sh LABEL CTX_K [args]` | Restarts TabbyAPI with a context size and extra args, then runs `context_bench.py` near the top. Reports VRAM via `amd-smi`. Stops this repo's TabbyAPI first (`serve/stop_tabby.sh`), gives up after `START_TIMEOUT` seconds, and stops the server it started if anything fails. |
 | `needle_test.py [N]` | Quick long-context recall check: a code buried in N filler sections (default 1400). |
@@ -19,6 +20,28 @@ model's tokenizer (`models/Qwen3.8-27B-EXL3-SC3.0bpw-H4/tokenizer.json`, or `MOD
 | `run_gpqa_all.sh` | Starts a server per model (SC 3.0 bpw H4, then the plain 3.0 bpw and 2.5 bpw if present), checks it serves that model, runs `gpqa_eval.py`, stops it. Refuses to start if something already answers on `TABBY_URL`. |
 | `gpqa_resume.sh` | Restarts `run_gpqa_all.sh` after a crash or reboot. |
 | `overthink_test.py VARIANT` | The 11 GPQA questions that spiralled, under one effort/system-prompt variant. This is how the anti-spiral prompt was picked. |
+
+### Ornith MoE speed sweep
+
+Start the Ornith server with enough context for the 16k prompt and leave it running. `CTX=16k` sets a 16k cache and a
+16,128-token sequence limit; the sweep leaves room for the chat template and its default 128-token completion. This
+larger cache may not fit on every GPU with this 24 GB-labeled quant and CPU expert split, so if startup fails, test 2k
+and 8k on the default 8k profile instead.
+
+```bash
+CTX=16k serve/run_tabby_ornith.sh
+```
+
+In another terminal, from the repo root, use Ornith's tokenizer and run three requests at each default context:
+
+```bash
+MODEL_DIR=models/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB python bench/moe_context_bench.py ornith-baseline --repeats 3
+```
+
+Each JSON line records the target and actual prompt token counts, time to first token, estimated prefill and decode
+tokens/second, generated length, and any request error. Results append to `logs/moe_context_bench.jsonl`; use a new
+label for each configuration or date. The script only sends requests to the running API: it does not restart the
+server or compile the engine. The context targets are a useful initial sweep, not a complete performance profile.
 
 ### GPQA data
 
