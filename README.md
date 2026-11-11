@@ -147,6 +147,14 @@ and the last server and build logs, with anything that looks like an API key rem
 OpenCode, whichever you have, with it. `./triage.sh "what you saw"` adds your own description; `./triage.sh --print`
 just writes the file for you to paste anywhere.
 
+### Corrupt Torch wheel during setup
+
+If `setup/make_venv.sh` fails while installing Torch with `zipfile.BadZipFile: Bad CRC-32`, check free space first
+(`df -h .` from the repo root; check the `.venv` filesystem too if it is elsewhere). The Python environment needs about
+15 GB. Then rerun `setup/make_venv.sh`: the ROCm Torch install bypasses pip's cache and fetches fresh wheel data. Do not
+remove `.venv` or purge the pip cache as the first step. If the CRC error recurs on the fresh fetch, investigate network
+transfer integrity and filesystem/storage health; bypassing the cache cannot fix persistent problems there.
+
 ### GPU hangs and wrong output
 
 A GPU hang resets the card: the server log shows `HW Exception ... GPU Hang`, the kernel log `amdgpu ... reset`, and a
