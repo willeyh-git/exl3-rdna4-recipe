@@ -11,8 +11,8 @@
 #                                       but it leaves less room for context)
 #   setup/download_models.sh 2.5bpw     the 2.5 bpw main model, only for the GPQA/perplexity comparison
 #   setup/download_models.sh ornith     Ornith-1.5-35B-A3B EXL3 4.00 bpw (24 GB)
-# In a terminal, each selected model can instead be linked from an existing directory containing config.json and
-# safetensors weights. Non-interactive runs keep downloading as before.
+# In a terminal, existing model directories can be discovered under a supplied models directory and linked into place.
+# Non-interactive runs keep downloading as before.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 MODELS_DIR=${MODELS_DIR:-models}
@@ -21,46 +21,78 @@ VENV=${VENV:-$ROOT/.venv}
 [ -x "$VENV/bin/hf" ] && export PATH="$VENV/bin:$PATH"
 cd "$ROOT"
 
-use_existing_model() {
-    local target=$1 answer model_path target_parent target_path
-    if [ -L "$target" ]; then
-        if [ -f "$target/config.json" ] && compgen -G "$target/*.safetensors" >/dev/null; then
-            echo "Using existing model at $target"
-            return 0
-        fi
-        echo "Existing model link is incomplete: $target" >&2
-        exit 1
+DISCOVERED_MODELS=()
+
+is_model_dir() {
+    local model_path=$1 weight
+    [ -f "$model_path/config.json" ] || return 1
+    for weight in "$model_path"/*.safetensors; do
+        [ -f "$weight" ] && return 0
+    done
+    return 1
+}
+
+discover_model_dirs() {
+    local search_dir=$1 candidate found
+    DISCOVERED_MODELS=()
+    search_dir=$(cd "$search_dir" && pwd -P) || return 1
+
+    if is_model_dir "$search_dir"; then
+        DISCOVERED_MODELS+=("$search_dir")
     fi
-    [ -t 0 ] || return 1
-    read -r -p "Already have $(basename "$target") downloaded? [y/N] " answer || return 1
-    case "$answer" in
-        [yY]|[yY][eE][sS]) ;;
-        *) return 1 ;;
-    esac
+    for candidate in "$search_dir"/*; do
+        [ -d "$candidate" ] || continue
+        is_model_dir "$candidate" || continue
+        candidate=$(cd "$candidate" && pwd -P) || continue
+        if [ "${#DISCOVERED_MODELS[@]}" -gt 0 ]; then
+            for found in "${DISCOVERED_MODELS[@]}"; do
+                [ "$found" = "$candidate" ] && continue 2
+            done
+        fi
+        DISCOVERED_MODELS+=("$candidate")
+    done
+}
 
-    read -r -p "Path to the existing model directory: " model_path || {
-        echo "Could not read the model directory." >&2
-        exit 1
-    }
-    [ -n "$model_path" ] || { echo "No model directory supplied." >&2; exit 1; }
-    case "$model_path" in
-        "~") model_path=$HOME ;;
-        "~/"*) model_path="$HOME/${model_path#~/}" ;;
+init_model_discovery() {
+    [ -t 0 ] || return 0
+    local entered search_dir=$MODELS_DIR index
+    read -r -p "Directory to search for existing models [$MODELS_DIR]: " entered || return 0
+    [ -z "$entered" ] || search_dir=$entered
+    case "$search_dir" in
+        "~") search_dir=$HOME ;;
+        "~/"*) search_dir="$HOME/${search_dir:2}" ;;
     esac
-    [[ "$model_path" = /* ]] || model_path="$PWD/$model_path"
-    model_path=$(cd "$model_path" 2>/dev/null && pwd -P) || {
-        echo "Model directory does not exist: $model_path" >&2
-        exit 1
-    }
-    [ -f "$model_path/config.json" ] && compgen -G "$model_path/*.safetensors" >/dev/null || {
+    [[ "$search_dir" = /* ]] || search_dir="$ROOT/$search_dir"
+    if [ ! -d "$search_dir" ]; then
+        if [ -n "$entered" ]; then
+            echo "Models directory does not exist: $search_dir" >&2
+            return 1
+        fi
+        echo "Models directory does not exist yet; continuing with downloads: $search_dir"
+        return 0
+    fi
+    discover_model_dirs "$search_dir"
+    if [ "${#DISCOVERED_MODELS[@]}" -eq 0 ]; then
+        echo "No model directories containing config.json and safetensors weights found in $search_dir or its immediate subdirectories."
+        return 0
+    fi
+
+    printf 'Found existing model directories:\n'
+    for index in "${!DISCOVERED_MODELS[@]}"; do
+        printf '  %d) %s\n' "$((index + 1))" "${DISCOVERED_MODELS[$index]}"
+    done
+}
+
+link_existing_model() {
+    local model_path=$1 target=$2 target_parent target_path
+    is_model_dir "$model_path" || {
         echo "Expected config.json and at least one .safetensors weight in $model_path" >&2
-        exit 1
+        return 1
     }
-
-    mkdir -p "$(dirname "$target")" || { echo "Could not create the model directory." >&2; exit 1; }
+    mkdir -p "$(dirname "$target")" || { echo "Could not create the model directory." >&2; return 1; }
     target_parent=$(cd "$(dirname "$target")" && pwd -P) || {
         echo "Could not resolve the model directory: $target" >&2
-        exit 1
+        return 1
     }
     target_path="$target_parent/$(basename "$target")"
     if [ "$model_path" = "$target_path" ]; then
@@ -69,10 +101,41 @@ use_existing_model() {
     fi
     if [ -e "$target" ] || [ -L "$target" ]; then
         echo "Refusing to replace existing model path: $target" >&2
+        return 1
+    fi
+    ln -s "$model_path" "$target" || { echo "Could not link $model_path to $target" >&2; return 1; }
+    echo "Using existing model: $target -> $model_path"
+}
+
+use_existing_model() {
+    local target=$1 selection selected_number
+    if [ -L "$target" ]; then
+        if is_model_dir "$target"; then
+            echo "Using existing model at $target"
+            return 0
+        fi
+        echo "Existing model link is incomplete: $target" >&2
         exit 1
     fi
-    ln -s "$model_path" "$target" || { echo "Could not link $model_path to $target" >&2; exit 1; }
-    echo "Using existing model: $target -> $model_path"
+    [ -t 0 ] && [ "${#DISCOVERED_MODELS[@]}" -gt 0 ] || return 1
+
+    printf 'Choose an existing directory for %s (0 downloads it):\n' "$(basename "$target")"
+    for selection in "${!DISCOVERED_MODELS[@]}"; do
+        printf '  %d) %s\n' "$((selection + 1))" "${DISCOVERED_MODELS[$selection]}"
+    done
+    while true; do
+        read -r -p "Selection [0]: " selection || return 1
+        [ -n "$selection" ] || return 1
+        if [[ "$selection" =~ ^[0-9]+$ ]]; then
+            selected_number=$((10#$selection))
+            [ "$selected_number" -eq 0 ] && return 1
+            if [ "$selected_number" -le "${#DISCOVERED_MODELS[@]}" ]; then
+                link_existing_model "${DISCOVERED_MODELS[$((selected_number - 1))]}" "$target" || exit 1
+                return 0
+            fi
+        fi
+        printf 'Enter 0 to download or a number from 1 to %d.\n' "${#DISCOVERED_MODELS[@]}"
+    done
 }
 
 download_from_hf() {
@@ -135,14 +198,19 @@ ornith() {
         "$MODELS_DIR/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB"
 }
 
-case ${1:-default} in
-    default)    main; draft ;;
-    main)       main ;;
-    draft)      draft ;;
-    3.0bpw-plain) main_plain ;;
-    draft-bf16) draft_bf16 ;;
-    draft-mia)  draft_mia ;;
-    2.5bpw)     main_25 ;;
-    ornith)     ornith ;;
+action=${1:-default}
+case "$action" in
+    default|main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw|ornith) ;;
     *) echo "usage: $0 [main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw|ornith]" >&2; exit 2 ;;
+esac
+init_model_discovery
+case "$action" in
+    default)       main; draft ;;
+    main)          main ;;
+    draft)         draft ;;
+    3.0bpw-plain)  main_plain ;;
+    draft-bf16)    draft_bf16 ;;
+    draft-mia)     draft_mia ;;
+    2.5bpw)        main_25 ;;
+    ornith)        ornith ;;
 esac
