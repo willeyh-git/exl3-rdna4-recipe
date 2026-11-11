@@ -1,6 +1,7 @@
 # Benchmarks and checks
 
-Run everything from the repo root with the venv active (`source setup/env.sh`). Results go to `logs/` and `gpqa/`.
+Run most scripts from the repo root with the venv active (`source setup/env.sh`). The MoE context Bash launcher locates
+the repo and activates the venv itself. Results go to `logs/` and `gpqa/`.
 
 ## Against the running server
 
@@ -12,7 +13,7 @@ model's tokenizer (`models/Qwen3.8-27B-EXL3-SC3.0bpw-H4/tokenizer.json`, or `MOD
 | Script | What it does |
 |---|---|
 | `bench_api.py NAME [URL] [KEY]` | Greedy code (600 tokens), sampled prose (600 tokens), prefill at 8k and 30k. Engine-neutral: works against llama-server too. |
-| `moe_context_bench.py LABEL [--contexts 2 8 16] [--repeats 3]` | Prefill and decode speed at prompt targets of 2k, 8k, and 16k by default. Appends one JSONL record per request to `logs/moe_context_bench.jsonl`; set `MODEL_DIR` to the served model. |
+| `run_moe_context_bench.sh LABEL [--contexts 2 8 16] [--repeats 3]` | Activates the project environment and measures prefill and decode speed at prompt targets of 2k, 8k, and 16k by default. Appends one JSONL record per request to `logs/moe_context_bench.jsonl`; set `MODEL_DIR` to the served model. |
 | `context_bench.py LABEL 8 32 60 ...` | Decode speed and recall by depth: a fresh filler document per depth with a code buried mid-way, then ~450 tokens of Python. This is the decode-by-depth table. |
 | `ctx_probe.sh LABEL CTX_K [args]` | Restarts TabbyAPI with a context size and extra args, then runs `context_bench.py` near the top. Reports VRAM via `amd-smi`. Stops this repo's TabbyAPI first (`serve/stop_tabby.sh`), gives up after `START_TIMEOUT` seconds, and stops the server it started if anything fails. |
 | `needle_test.py [N]` | Quick long-context recall check: a code buried in N filler sections (default 1400). |
@@ -35,13 +36,15 @@ CTX=16k serve/run_tabby_ornith.sh
 In another terminal, from the repo root, use Ornith's tokenizer and run three requests at each default context:
 
 ```bash
-MODEL_DIR=models/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB python bench/moe_context_bench.py ornith-baseline --repeats 3
+MODEL_DIR=models/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB bench/run_moe_context_bench.sh ornith-baseline --repeats 3
 ```
 
 Each JSON line records the target and actual prompt token counts, time to first token, estimated prefill and decode
 tokens/second, generated length, and any request error. Results append to `logs/moe_context_bench.jsonl`; use a new
-label for each configuration or date. The script only sends requests to the running API: it does not restart the
-server or compile the engine. The context targets are a useful initial sweep, not a complete performance profile.
+label for each configuration or date. The Bash launcher sources `setup/env.sh` and runs the benchmark with the project
+virtual environment, so run `setup/make_venv.sh` first if it is not set up. The benchmark only sends requests to the
+already-running API: it does not start or restart the server or compile the engine. The context targets are a useful
+initial sweep, not a complete performance profile.
 
 ### GPQA data
 
