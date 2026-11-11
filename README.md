@@ -90,6 +90,20 @@ setup/download_models.sh     # Qwen3.8-27B EXL3 3.0 bpw SC H4 (13.4 GB) + the 3.
 The default download and launcher remain Qwen. To fetch the optional Ornith quant as well, run
 `setup/download_models.sh ornith`; this does not change the default model or config.
 
+With the Ornith target present (from `setup/download_models.sh ornith` or a linked local model), prepare the separate
+DFlash2 draft by downloading its BF16 checkpoint and converting it to EXL3 (the conversion uses the GPU):
+
+```bash
+setup/download_models.sh ornith-dflash2-bf16
+setup/requant_ornith_draft.sh
+```
+
+The source is about 1.05 GB and is pinned to a revision trained for Ornith-1.5-35B-A3B. The converter checks that its
+metadata declares the DFlash2 architecture and a 2048-wide draft for a 40-layer target, matching the current Ornith
+target config, before quantizing it to 3.0 bpw.
+
+The converted draft is optional; the ordinary Ornith launcher remains available as the baseline.
+
 When run in a terminal, the downloader asks once for a directory to search (default: `models/`). It accepts either a
 model directory itself or a parent directory; it checks the selected directory and its immediate subdirectories for
 `config.json` plus at least one `.safetensors` file, then shows the discovered directories. For each requested download,
@@ -98,7 +112,7 @@ selected model is linked under the expected name (`models/` by default), so its 
 configs need no edits. Relative search paths are resolved from the repository root. Non-interactive runs continue
 downloading as before; an already-created valid model link is reused automatically.
 
-The draft is our 3.0 bpw EXL3 quant of inco.ai's DFlash2 draft,
+The default Qwen draft is our 3.0 bpw EXL3 quant of inco.ai's DFlash2 draft,
 [published on Hugging Face](https://huggingface.co/parth-thakre/Qwen3.8-27B-DFlash2-EXL3-3.0bpw). To make it yourself
 instead: `setup/download_models.sh draft-bf16`, then `setup/requant_draft.sh` (uses the GPU, a few minutes).
 
@@ -116,13 +130,31 @@ haven't tried it. Reports welcome.
 serve/run_tabby.sh           # http://127.0.0.1:8096/v1, 96k context
 CTX=128k serve/run_tabby.sh  # 128k: nothing else (or only a light desktop, ~1 GB) on the GPU
 serve/run_tabby_ornith.sh    # optional Ornith profile: 8k context, one request
+serve/run_tabby_ornith_dflash2.sh # optional Ornith profile with external DFlash2 draft
 serve/stop_tabby.sh
 ```
 
 The Ornith profile configures `cpu_moe_split_experts: 128` for the model's 256 experts per layer, placing cold experts in
-system RAM and dynamically retaining hot experts in VRAM. It has not been load- or generation-tested through this
-ExLlamaV3/TabbyAPI stack. The quant is labeled for 24 GB while this recipe targets a 16 GB card; sufficient system RAM
-and CPU throughput are also required, and successful loading, fit, and performance are not guaranteed.
+system RAM and dynamically retaining hot experts in VRAM. A prior user run loaded the model and generated with its
+built-in MTP; the optional external DFlash2 conversion and launcher have not been tested on the target hardware. The
+quant is labeled for 24 GB while this recipe targets a 16 GB card; the external draft adds memory pressure, and
+sufficient system RAM and CPU throughput are also required. Successful loading and performance are not guaranteed.
+
+The DFlash2 launcher selects the converted model as a separate draft (7 tokens, Q4 draft cache); it does not use the
+Qwen draft or the target's built-in MTP. Start with the short 8k context and one request, then compare against
+`serve/run_tabby_ornith.sh`. The draft checkpoint's upstream serving benchmarks use different hardware and do not
+predict performance on this ROCm setup.
+
+### Measured Ornith DFlash2 draft sweep
+
+The chart below summarizes the supplied host measurements. For each explicitly labelled `ornith-dflash2-dtokens-N`
+setting, it shows the median decode speed and per-request draft acceptance from the latest complete three-repeat sweep
+at each prompt target. The no-draft run is a speed reference; draft acceptance is not applicable. Unsuffixed
+`ornith-dflash2` records are omitted because their labels do not identify the draft-token count. Runs used the reported
+128K cache, Q8 main cache, `cpu_moe_split_experts: 100`, and Q4 draft cache; actual prompt lengths were about 1.5K,
+7.7K, 15.9K, and 32.2K tokens. These results describe one host and configuration, not a general performance guarantee.
+
+![Ornith DFlash2 decode speed and draft acceptance by draft-token count and prompt context](bench/ornith_dflash2_benchmark.png)
 
 TabbyAPI writes a random API key to `tabbyAPI/api_tokens.yml` on first start. Send it as
 `Authorization: Bearer <key>`:
