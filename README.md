@@ -90,6 +90,11 @@ setup/download_models.sh     # Qwen3.8-27B EXL3 3.0 bpw SC H4 (13.4 GB) + the 3.
 The default download and launcher remain Qwen. To fetch the optional Ornith quant as well, run
 `setup/download_models.sh ornith`; this does not change the default model or config.
 
+When run in a terminal, the downloader asks for each model it is about to fetch whether it is already on disk. Answer
+yes and enter the model directory (it must contain `config.json` and at least one `.safetensors` file); setup links it
+under the expected name (`models/` by default), so the TabbyAPI configs need no edits and the model is not copied.
+Non-interactive runs continue downloading as before; an already-created model link is reused automatically.
+
 The draft is our 3.0 bpw EXL3 quant of inco.ai's DFlash2 draft,
 [published on Hugging Face](https://huggingface.co/parth-thakre/Qwen3.8-27B-DFlash2-EXL3-3.0bpw). To make it yourself
 instead: `setup/download_models.sh draft-bf16`, then `setup/requant_draft.sh` (uses the GPU, a few minutes).
