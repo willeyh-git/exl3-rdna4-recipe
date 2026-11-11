@@ -19,7 +19,7 @@ python -m pip install --upgrade pip
 
 # Plain PyPI packages first (none of them pulls in torch), then torch from the ROCm index so pip can't pick a CUDA build
 python -m pip install -r "$ROOT/setup/requirements.txt"
-python -m pip install --index-url "$TORCH_INDEX_URL" -r "$ROOT/setup/requirements-torch.txt"
+python -m pip install --no-cache-dir --index-url "$TORCH_INDEX_URL" -r "$ROOT/setup/requirements-torch.txt"
 
 python - <<'EOF'
 import torch
