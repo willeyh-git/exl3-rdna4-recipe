@@ -145,6 +145,17 @@ Qwen draft or the target's built-in MTP. Start with the short 8k context and one
 `serve/run_tabby_ornith.sh`. The draft checkpoint's upstream serving benchmarks use different hardware and do not
 predict performance on this ROCm setup.
 
+### Measured Ornith DFlash2 draft sweep
+
+The chart below summarizes the supplied host measurements. For each explicitly labelled `ornith-dflash2-dtokens-N`
+setting, it shows the median decode speed and per-request draft acceptance from the latest complete three-repeat sweep
+at each prompt target. The no-draft run is a speed reference; draft acceptance is not applicable. Unsuffixed
+`ornith-dflash2` records are omitted because their labels do not identify the draft-token count. Runs used the reported
+128K cache, Q8 main cache, `cpu_moe_split_experts: 100`, and Q4 draft cache; actual prompt lengths were about 1.5K,
+7.7K, 15.9K, and 32.2K tokens. These results describe one host and configuration, not a general performance guarantee.
+
+![Ornith DFlash2 decode speed and draft acceptance by draft-token count and prompt context](bench/ornith_dflash2_benchmark.png)
+
 TabbyAPI writes a random API key to `tabbyAPI/api_tokens.yml` on first start. Send it as
 `Authorization: Bearer <key>`:
 

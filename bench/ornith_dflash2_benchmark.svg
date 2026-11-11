@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1500" height="810" viewBox="0 0 1500 810" role="img" aria-labelledby="title desc">
+  <title id="title">Ornith DFlash2 benchmark by draft-token count</title>
+  <desc id="desc">Median decode tokens per second and draft acceptance for draft-token settings two through six, plus a no-draft speed reference, at four prompt contexts.</desc>
+  <style>
+    text { font-family: sans-serif; fill: #202124; }
+    .title { font-size: 30px; font-weight: 700; }
+    .subtitle { font-size: 16px; fill: #555; }
+    .panel-title { font-size: 20px; font-weight: 700; }
+    .axis { font-size: 14px; fill: #333; }
+    .grid { stroke: #d9dde2; stroke-width: 1; }
+    .axis-line { stroke: #5f6368; stroke-width: 1.4; }
+    .legend { font-size: 15px; }
+    .note { font-size: 14px; fill: #555; }
+    .series { fill: none; stroke-width: 3; stroke-linejoin: round; stroke-linecap: round; }
+    .point { stroke-width: 2; }
+  </style>
+  <rect width="1500" height="810" fill="#fff"/>
+  <text class="title" x="70" y="48">Ornith DFlash2: draft-token sweep</text>
+  <text class="subtitle" x="70" y="78">Latest complete three-repeat sweep per labelled setting; points are medians</text>
+
+  <text class="panel-title" x="100" y="128">Decode speed</text>
+  <text class="subtitle" x="100" y="151">tokens per second (higher is faster)</text>
+  <text class="panel-title" x="800" y="128">Draft acceptance</text>
+  <text class="subtitle" x="800" y="151">percent of proposed draft tokens accepted</text>
+
+  <!-- Plot grids and axes: left plot x=160..640, y=180..500; right plot x=860..1340. -->
+  <g class="grid">
+    <line x1="160" y1="500" x2="640" y2="500"/><line x1="160" y1="446.7" x2="640" y2="446.7"/>
+    <line x1="160" y1="393.3" x2="640" y2="393.3"/><line x1="160" y1="340" x2="640" y2="340"/>
+    <line x1="160" y1="286.7" x2="640" y2="286.7"/><line x1="160" y1="233.3" x2="640" y2="233.3"/>
+    <line x1="160" y1="180" x2="640" y2="180"/>
+    <line x1="860" y1="500" x2="1340" y2="500"/><line x1="860" y1="436" x2="1340" y2="436"/>
+    <line x1="860" y1="372" x2="1340" y2="372"/><line x1="860" y1="308" x2="1340" y2="308"/>
+    <line x1="860" y1="244" x2="1340" y2="244"/><line x1="860" y1="180" x2="1340" y2="180"/>
+  </g>
+  <g class="grid" stroke-dasharray="2 4">
+    <line x1="160" y1="180" x2="160" y2="500"/><line x1="320" y1="180" x2="320" y2="500"/>
+    <line x1="480" y1="180" x2="480" y2="500"/><line x1="640" y1="180" x2="640" y2="500"/>
+    <line x1="860" y1="180" x2="860" y2="500"/><line x1="1020" y1="180" x2="1020" y2="500"/>
+    <line x1="1180" y1="180" x2="1180" y2="500"/><line x1="1340" y1="180" x2="1340" y2="500"/>
+  </g>
+  <g class="axis-line">
+    <line x1="160" y1="180" x2="160" y2="500"/><line x1="160" y1="500" x2="640" y2="500"/>
+    <line x1="860" y1="180" x2="860" y2="500"/><line x1="860" y1="500" x2="1340" y2="500"/>
+  </g>
+
+  <g class="axis" text-anchor="end">
+    <text x="148" y="505">0</text><text x="148" y="452">20</text><text x="148" y="398">40</text>
+    <text x="148" y="345">60</text><text x="148" y="292">80</text><text x="148" y="239">100</text><text x="148" y="185">120</text>
+    <text x="848" y="505">0</text><text x="848" y="441">20</text><text x="848" y="377">40</text>
+    <text x="848" y="313">60</text><text x="848" y="249">80</text><text x="848" y="185">100</text>
+  </g>
+  <g class="axis" text-anchor="middle">
+    <text x="160" y="524">2K</text><text x="320" y="524">8K</text><text x="480" y="524">16K</text><text x="640" y="524">32K</text>
+    <text x="860" y="524">2K</text><text x="1020" y="524">8K</text><text x="1180" y="524">16K</text><text x="1340" y="524">32K</text>
+    <text x="400" y="552">Target prompt context</text><text x="1100" y="552">Target prompt context</text>
+  </g>
+  <text class="axis" text-anchor="middle" transform="translate(77 340) rotate(-90)">Decode tokens/second</text>
+  <text class="axis" text-anchor="middle" transform="translate(777 340) rotate(-90)">Acceptance (%)</text>
+
+  <!-- Decode speed medians: no draft, then DFlash2 draft_num_tokens 2–6. -->
+  <g>
+    <polyline class="series" stroke="#666666" stroke-dasharray="8 6" points="160,326.4 320,327.7 480,329.3 640,333.9"/>
+    <polyline class="series" stroke="#0072B2" points="160,283.7 320,270.1 480,292 640,285.1"/>
+    <polyline class="series" stroke="#E69F00" points="160,273.3 320,269.3 480,268.5 640,280.5"/>
+    <polyline class="series" stroke="#009E73" points="160,269.3 320,260.8 480,262.1 640,265.6"/>
+    <polyline class="series" stroke="#D55E00" points="160,245.6 320,210.7 480,256 640,298.7"/>
+    <polyline class="series" stroke="#CC79A7" points="160,321.9 320,292.3 480,290.9 640,279.5"/>
+    <g fill="#fff" stroke="#666666"><circle class="point" cx="160" cy="326.4" r="5"/><circle class="point" cx="320" cy="327.7" r="5"/><circle class="point" cx="480" cy="329.3" r="5"/><circle class="point" cx="640" cy="333.9" r="5"/></g>
+    <g fill="#fff" stroke="#0072B2"><circle class="point" cx="160" cy="283.7" r="5"/><circle class="point" cx="320" cy="270.1" r="5"/><circle class="point" cx="480" cy="292" r="5"/><circle class="point" cx="640" cy="285.1" r="5"/></g>
+    <g fill="#fff" stroke="#E69F00"><circle class="point" cx="160" cy="273.3" r="5"/><circle class="point" cx="320" cy="269.3" r="5"/><circle class="point" cx="480" cy="268.5" r="5"/><circle class="point" cx="640" cy="280.5" r="5"/></g>
+    <g fill="#fff" stroke="#009E73"><circle class="point" cx="160" cy="269.3" r="5"/><circle class="point" cx="320" cy="260.8" r="5"/><circle class="point" cx="480" cy="262.1" r="5"/><circle class="point" cx="640" cy="265.6" r="5"/></g>
+    <g fill="#fff" stroke="#D55E00"><circle class="point" cx="160" cy="245.6" r="5"/><circle class="point" cx="320" cy="210.7" r="5"/><circle class="point" cx="480" cy="256" r="5"/><circle class="point" cx="640" cy="298.7" r="5"/></g>
+    <g fill="#fff" stroke="#CC79A7"><circle class="point" cx="160" cy="321.9" r="5"/><circle class="point" cx="320" cy="292.3" r="5"/><circle class="point" cx="480" cy="290.9" r="5"/><circle class="point" cx="640" cy="279.5" r="5"/></g>
+  </g>
+
+  <!-- Draft acceptance medians for DFlash2 token counts 2–6; no-draft is not applicable. -->
+  <g>
+    <polyline class="series" stroke="#0072B2" points="860,283.7 1020,257.4 1180,283.7 1340,262.6"/>
+    <polyline class="series" stroke="#E69F00" points="860,285.6 1020,268 1180,270.2 1340,275"/>
+    <polyline class="series" stroke="#009E73" points="860,311.5 1020,273.8 1180,272.2 1340,275.7"/>
+    <polyline class="series" stroke="#D55E00" points="860,338.1 1020,291 1180,322.7 1340,322.4"/>
+    <polyline class="series" stroke="#CC79A7" points="860,383.8 1020,349.9 1180,313.1 1340,300.3"/>
+    <g fill="#fff" stroke="#0072B2"><circle class="point" cx="860" cy="283.7" r="5"/><circle class="point" cx="1020" cy="257.4" r="5"/><circle class="point" cx="1180" cy="283.7" r="5"/><circle class="point" cx="1340" cy="262.6" r="5"/></g>
+    <g fill="#fff" stroke="#E69F00"><circle class="point" cx="860" cy="285.6" r="5"/><circle class="point" cx="1020" cy="268" r="5"/><circle class="point" cx="1180" cy="270.2" r="5"/><circle class="point" cx="1340" cy="275" r="5"/></g>
+    <g fill="#fff" stroke="#009E73"><circle class="point" cx="860" cy="311.5" r="5"/><circle class="point" cx="1020" cy="273.8" r="5"/><circle class="point" cx="1180" cy="272.2" r="5"/><circle class="point" cx="1340" cy="275.7" r="5"/></g>
+    <g fill="#fff" stroke="#D55E00"><circle class="point" cx="860" cy="338.1" r="5"/><circle class="point" cx="1020" cy="291" r="5"/><circle class="point" cx="1180" cy="322.7" r="5"/><circle class="point" cx="1340" cy="322.4" r="5"/></g>
+    <g fill="#fff" stroke="#CC79A7"><circle class="point" cx="860" cy="383.8" r="5"/><circle class="point" cx="1020" cy="349.9" r="5"/><circle class="point" cx="1180" cy="313.1" r="5"/><circle class="point" cx="1340" cy="300.3" r="5"/></g>
+  </g>
+
+  <g class="legend">
+    <line x1="115" y1="610" x2="150" y2="610" stroke="#666666" stroke-width="3" stroke-dasharray="8 6"/><text x="160" y="615">No draft (speed only)</text>
+    <line x1="385" y1="610" x2="420" y2="610" stroke="#0072B2" stroke-width="3"/><text x="430" y="615">DFlash2 · 2 tokens</text>
+    <line x1="650" y1="610" x2="685" y2="610" stroke="#E69F00" stroke-width="3"/><text x="695" y="615">DFlash2 · 3 tokens</text>
+    <line x1="915" y1="610" x2="950" y2="610" stroke="#009E73" stroke-width="3"/><text x="960" y="615">DFlash2 · 4 tokens</text>
+    <line x1="115" y1="648" x2="150" y2="648" stroke="#D55E00" stroke-width="3"/><text x="160" y="653">DFlash2 · 5 tokens</text>
+    <line x1="385" y1="648" x2="420" y2="648" stroke="#CC79A7" stroke-width="3"/><text x="430" y="653">DFlash2 · 6 tokens</text>
+  </g>
+  <text class="note" x="70" y="704">No-draft acceptance is N/A, not 0%. The unsuffixed “ornith-dflash2” records are excluded because their token count is not explicit.</text>
+  <text class="note" x="70" y="730">Targets are 2K, 8K, 16K, and 32K prompts (actual inputs: 1,533, 7,677, 15,853, and 32,242 tokens).</text>
+  <text class="note" x="70" y="756">Speed and acceptance can trade off; these are measurements from one host/configuration, not a general guarantee.</text>
+</svg>
