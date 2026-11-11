@@ -11,6 +11,7 @@
 #                                       but it leaves less room for context)
 #   setup/download_models.sh 2.5bpw     the 2.5 bpw main model, only for the GPQA/perplexity comparison
 #   setup/download_models.sh ornith     Ornith-1.5-35B-A3B EXL3 4.00 bpw (24 GB)
+#   setup/download_models.sh ornith-dflash2-bf16  BF16 Ornith DFlash2 draft for EXL3 conversion
 # In a terminal, existing model directories can be discovered under a supplied models directory and linked into place.
 # Non-interactive runs keep downloading as before.
 set -euo pipefail
@@ -197,11 +198,15 @@ ornith() {
     fetch JRamirez-UAB/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB ac1d94ac17373eaea6818cd815591d003177916b \
         "$MODELS_DIR/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB"
 }
+ornith_dflash2_bf16() {
+    fetch jzinno/Ornith-1.5-35B-A3B-DFlash2 9b4852c05fd00b672b7434b1bb105bc03c8682b0 \
+        "$MODELS_DIR/Ornith-1.5-35B-A3B-DFlash2-bf16"
+}
 
 action=${1:-default}
 case "$action" in
-    default|main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw|ornith) ;;
-    *) echo "usage: $0 [main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw|ornith]" >&2; exit 2 ;;
+    default|main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw|ornith|ornith-dflash2-bf16) ;;
+    *) echo "usage: $0 [main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw|ornith|ornith-dflash2-bf16]" >&2; exit 2 ;;
 esac
 init_model_discovery
 case "$action" in
@@ -213,4 +218,5 @@ case "$action" in
     draft-mia)     draft_mia ;;
     2.5bpw)        main_25 ;;
     ornith)        ornith ;;
+    ornith-dflash2-bf16) ornith_dflash2_bf16 ;;
 esac
