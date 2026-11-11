@@ -16,7 +16,7 @@ source "$VENV/bin/activate" || return 1
 # Check `rocminfo` / `amd-smi list` if you have more than one GPU.
 export HIP_VISIBLE_DEVICES=${HIP_VISIBLE_DEVICES:-0}
 # System ROCm (setup/rocm.sh sets ROCM_PATH/ROCM_HOME: /opt/rocm on most distros, /usr on Fedora). Only building the
-# extension needs it; serving uses the runtime in PyTorch's ROCm wheel, so without it (the container image) carry on.
+# extension needs it; serving uses the runtime in PyTorch's ROCm wheel.
 find_rocm 2>/dev/null || true
 
 # Triton compiles a small C helper at runtime: it needs a host C compiler (gcc) and

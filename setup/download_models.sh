@@ -10,6 +10,7 @@
 #   setup/download_models.sh draft-mia  ready-made 5.0 bpw DFlash2 draft by Mia-AiLab (1.5 GB, no requant needed,
 #                                       but it leaves less room for context)
 #   setup/download_models.sh 2.5bpw     the 2.5 bpw main model, only for the GPQA/perplexity comparison
+#   setup/download_models.sh ornith     Ornith-1.5-35B-A3B EXL3 4.00 bpw (24 GB)
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 MODELS_DIR=${MODELS_DIR:-models}
@@ -19,8 +20,8 @@ VENV=${VENV:-$ROOT/.venv}
 command -v hf >/dev/null || { echo "hf CLI not found; run setup/make_venv.sh first or pip install huggingface_hub" >&2; exit 1; }
 cd "$ROOT"
 
-# fetch REPO REVISION PATH: download, then leave .download-complete (the revision) in PATH, so an interrupted download
-# isn't mistaken for a finished one (container/run.sh checks it). Rerunning resumes and only fetches what's missing.
+# fetch REPO REVISION PATH: download, then write .download-complete (the revision) only after it finishes.
+# Rerunning resumes and only fetches what's missing.
 fetch() {
     hf download "$1" --revision "$2" --local-dir "$3"
     echo "$1@$2" > "$3/.download-complete"
@@ -49,6 +50,10 @@ main_25() {
     # Branch 2.50bpw (commit 0cd1091272291d008e06976acb81e25946cdc767 when tested)
     hf download turboderp/Qwen3.8-27B-exl3 --revision 2.50bpw --local-dir "$MODELS_DIR/Qwen3.8-27B-EXL3-2.5bpw"
 }
+ornith() {
+    fetch JRamirez-UAB/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB ac1d94ac17373eaea6818cd815591d003177916b \
+        "$MODELS_DIR/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB"
+}
 
 case ${1:-default} in
     default)    main; draft ;;
@@ -58,5 +63,6 @@ case ${1:-default} in
     draft-bf16) draft_bf16 ;;
     draft-mia)  draft_mia ;;
     2.5bpw)     main_25 ;;
-    *) echo "usage: $0 [main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw]" >&2; exit 2 ;;
+    ornith)     ornith ;;
+    *) echo "usage: $0 [main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw|ornith]" >&2; exit 2 ;;
 esac

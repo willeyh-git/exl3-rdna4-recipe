@@ -1,7 +1,7 @@
 #!/bin/bash
 # Something didn't work? This collects what an AI coding agent needs to help (distro, kernel, GPU and device access,
-# which GPU runs the display, clocks and overdrive, amdgpu driver settings and kernel-log errors, container runtime and
-# settings, recipe version, the last server and build logs) and opens the first agent CLI you have installed
+# which GPU runs the display, clocks and overdrive, amdgpu driver settings and kernel-log errors, recipe version, the
+# last server and build logs) and opens the first agent CLI you have installed
 # (Claude Code, Codex or OpenCode) with it, in this directory. The agent sends it to its model provider, like
 # anything you type into it; tokens and keys are removed first, and in a terminal you're asked before it opens.
 #
@@ -21,9 +21,7 @@ problem=${*:-}
 # Tokens and keys: long hex strings, common token prefixes, key/password/secret/token values in key: value,
 # key=value and "key": "value" form, and Bearer headers. Applied to the whole prompt, your own text included.
 redact() {
-    # Image digests are kept, cut to 12 hex digits (as docker and podman show them), so the report names the image
-    sed -E 's/sha256:([0-9a-fA-F]{12})[0-9a-fA-F]{52}/sha256:\1/g
-        s/[0-9a-fA-F]{32,}/<redacted>/g
+    sed -E 's/[0-9a-fA-F]{32,}/<redacted>/g
         s/(hf_|sk-|sk_|ghp_|gho_|ghs_|github_pat_|xox[abp]-|glpat-|AKIA)[A-Za-z0-9_-]{8,}/<redacted>/g
         s/("?[A-Za-z_]*(api[_-]?key|token|secret|password|passwd)[A-Za-z_]*"?[[:space:]]*[:=][[:space:]]*)("[^"]*"|[^[:space:],}]+)/\1<redacted>/Ig
         s/(Bearer)[[:space:]]+[^[:space:]"]+/\1 <redacted>/Ig'
@@ -107,7 +105,7 @@ collect() {
     ls -l /dev/kfd /dev/dri/renderD* 2>&1
     echo "you: $(id)"
     command -v amd-smi >/dev/null && run amd-smi metric --mem-usage 2>/dev/null | grep -E 'GPU|VRAM'
-    command -v hipconfig >/dev/null && echo "hipconfig: $(hipconfig --version 2>/dev/null)" || echo "hipconfig: not installed (fine for the container)"
+    command -v hipconfig >/dev/null && echo "hipconfig: $(hipconfig --version 2>/dev/null)" || echo "hipconfig: not installed"
     endsec
     section "GPUs, display and clocks"
     gpu_state
@@ -120,28 +118,6 @@ collect() {
     echo "--- previous boot"
     kernel_log -1
     endsec
-    section "Container runtime"
-    for ct in docker podman; do
-        if command -v $ct >/dev/null; then
-            echo "$ct: $($ct --version 2>&1)"
-            $ct info >/dev/null 2>&1 && echo "  $ct info: ok" || echo "  $ct info: FAILS ($($ct info 2>&1 | tail -1))"
-            $ct ps -a --filter name=exl3-rdna4 --format '  container {{.Names}}: {{.Status}} ({{.Image}})' 2>/dev/null
-            img=$($ct inspect --format '{{.Image}}' exl3-rdna4 2>/dev/null) && id=${img#sha256:} &&
-                echo "  image: $($ct image inspect --format '{{join .RepoDigests " "}}' "$img" 2>/dev/null) (id ${id:0:12})"
-            $ct inspect --format '{{range .Config.Env}}{{println .}}{{end}}' exl3-rdna4 2>/dev/null |
-                grep -E '^(CTX|EXL3_|AMD_|HIP_|ROCR_)' | sed 's/^/  env: /'
-        else
-            echo "$ct: not installed"
-        fi
-    done
-    endsec
-    for ct in docker podman; do
-        if command -v $ct >/dev/null && $ct ps -a -q --filter name=exl3-rdna4 2>/dev/null | grep -q .; then
-            section "Container log ($ct logs --tail 80 exl3-rdna4)"
-            $ct logs --tail 80 exl3-rdna4 2>&1 | redact
-            endsec
-        fi
-    done
     if [ -d .venv ] || [ -d exllamav3 ] || [ -d logs ]; then
         section "Host install"
         echo "venv: $([ -x .venv/bin/python ] && .venv/bin/python -c 'import sys, torch; print(sys.version.split()[0], "torch", torch.__version__)' 2>&1 | tail -1 || echo missing)"
@@ -163,20 +139,22 @@ prompt_file=$(mktemp "${TMPDIR:-/tmp}/exl3-rdna4-triage.XXXXXX.md")
 raw=$(mktemp)
 {
 cat <<EOF
-I'm trying to run exl3-rdna4-recipe (Qwen3.8-27B with ExLlamaV3 + TabbyAPI on an AMD RX 9070 / 9070 XT) and something
-isn't working. You're in the recipe's directory. Please help me get it running.
+I'm trying to run exl3-rdna4-recipe (Qwen3.8-27B or the optional Ornith-1.5-35B-A3B profile with ExLlamaV3 + TabbyAPI
+on an AMD RX 9070 / 9070 XT) and something isn't working. You're in the recipe's directory. Please help me get it
+running.
 
 What went wrong, in my words: ${problem:-"(not given; work it out from the details below)"}
 
 How to help:
-- Start from the details below, then read README.md, container/README.md (the container route) and the
-  "Limitations" in notes/measurements.md. The setup scripts are in setup/, the container files in container/.
+- Start from the details below, then read README.md and the "Limitations" in notes/measurements.md. The setup scripts
+  are in setup/ and the host serving scripts are in serve/.
 - Explain what you think is wrong before changing anything, and ask before anything that needs sudo, installs
   packages, or deletes files (never delete downloaded models or the .venv without asking).
 - If the GPU hung or reset (my desktop died, \`GPU Hang\` or \`MODE1 reset\` in the logs) or the output turned to
-  garbage (a run of \`!\`, 0% of the draft accepted), read "GPU hangs and wrong output" in README.md and take me
-  through its tests one at a time, starting with any NOT STOCK line below (an undervolt or power limit). Diagnostics that need sudo (the full kernel log, firmware versions) are fine to
-  suggest: show me the command and what it reads, and I'll run it.
+  garbage (a run of \`!\`; on the Qwen draft profile, 0% of the draft accepted), read "GPU hangs and wrong output" in
+  README.md and take me through its tests one at a time, starting with any NOT STOCK line below (an undervolt or power
+  limit). Diagnostics that need sudo (the full kernel log, firmware versions) are fine to suggest: show me the command
+  and what it reads, and I'll run it.
 - Don't post anything online for me. If it looks like a bug in the recipe, write a GitHub issue I can review and file
   myself at https://github.com/parth-thakre/exl3-rdna4-recipe/issues, with the details that matter.
 

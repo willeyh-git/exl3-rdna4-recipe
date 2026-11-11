@@ -5,6 +5,9 @@ under Linux as a local OpenAI-compatible server for coding agents and chat. It u
 [TabbyAPI](https://github.com/theroyallab/tabbyAPI) with our RDNA4 patches on top, and a DFlash2 draft model for
 speculative decoding.
 
+An optional Ornith-1.5-35B-A3B host profile configures TabbyAPI's CPU MoE expert splitting. It is an unverified starting
+point: the quant is labeled for 24 GB, and compatibility and fit on the 16 GB RX 9070 XT are not guaranteed.
+
 ## What you get
 
 - **Code, one request:** ~150 tok/s at short context, ~105 tok/s at 120k.
@@ -20,8 +23,7 @@ speculative decoding.
 - **Several requests:** handles 3 requests at once (e.g. agent subagents or parallel tool calls) instead of queuing
   them (`max_batch_size` in `tabbyAPI/config.yml`). They share the one context: a single request can use all 96k, or
   several split it.
-- **Setup:** one line to install and run (a container, any distro, Omarchy included), or a handful of scripts for a
-  host install.
+- **Setup:** a handful of scripts for a Linux host install.
 
 Speeds are typical for an RX 9070 XT and depend on the content.
 
@@ -51,27 +53,6 @@ tested on one machine:
   `setup/requant_draft.sh`.
 - **Setup scripts:** pinned versions, missing headers fetched without sudo, one command each to build and serve.
 
-## Quick start: container (any distro, Omarchy)
-
-With Docker or Podman and the in-kernel amdgpu driver, nothing else to install (no ROCm, no Python):
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/parth-thakre/exl3-rdna4-recipe/main/install.sh | bash
-```
-
-That puts the recipe in `~/.local/share/exl3-rdna4-recipe`, downloads the models once (~14 GB) and serves
-http://127.0.0.1:8096/v1 (a chat page at `/ui`). Run it again to update. If you'd rather read the script first, the
-same thing by hand:
-
-```bash
-git clone https://github.com/parth-thakre/exl3-rdna4-recipe && cd exl3-rdna4-recipe
-container/run.sh             # downloads the models once (~14 GB), then serves http://127.0.0.1:8096/v1
-```
-
-On Omarchy, Docker is already there, so that's all (tested so far with Podman on Fedora; the Docker path not yet). [`container/README.md`](container/README.md) has the details, the
-plain `docker run` command and how to build the image. The rest of this README is the host install, which is what the
-measurements were taken on (the container builds the same code with the same scripts).
-
 ## Requirements (host install)
 
 - AMD RX 9070 XT or RX 9070 (gfx1201, 16 GB). Only the 9070 XT has been tested.
@@ -90,7 +71,8 @@ measurements were taken on (the container builds the same code with the same scr
   - Other distros: the same packages under your distro's names; Python 3.12 from uv if the distro has a newer one.
 - Python 3.12, the version we tested.
 - Your user in the `render` group (access to `/dev/kfd` and `/dev/dri/renderD*`).
-- About 20 GB of disk for the models and 15 GB for the Python environment.
+- About 20 GB of disk for the default Qwen models and 15 GB for the Python environment. The optional Ornith quant is
+  labeled 24 GB; allow at least that much additional space if you download it.
 - Nothing else on the GPU while serving: the server uses almost all of the 16 GB.
 
 ## Install
@@ -104,6 +86,9 @@ setup/build_exllamav3.sh     # clone ExLlamaV3 at the pinned commit, apply our p
 setup/install_tabby.sh       # clone TabbyAPI at the pinned commit, write tabbyAPI/config.yml
 setup/download_models.sh     # Qwen3.8-27B EXL3 3.0 bpw SC H4 (13.4 GB) + the 3.0 bpw DFlash2 draft (0.9 GB)
 ```
+
+The default download and launcher remain Qwen. To fetch the optional Ornith quant as well, run
+`setup/download_models.sh ornith`; this does not change the default model or config.
 
 The draft is our 3.0 bpw EXL3 quant of inco.ai's DFlash2 draft,
 [published on Hugging Face](https://huggingface.co/parth-thakre/Qwen3.8-27B-DFlash2-EXL3-3.0bpw). To make it yourself
@@ -122,8 +107,14 @@ haven't tried it. Reports welcome.
 ```bash
 serve/run_tabby.sh           # http://127.0.0.1:8096/v1, 96k context
 CTX=128k serve/run_tabby.sh  # 128k: nothing else (or only a light desktop, ~1 GB) on the GPU
+serve/run_tabby_ornith.sh    # optional Ornith profile: 8k context, one request
 serve/stop_tabby.sh
 ```
+
+The Ornith profile configures `cpu_moe_split_experts: 128` for the model's 256 experts per layer, placing cold experts in
+system RAM and dynamically retaining hot experts in VRAM. It has not been load- or generation-tested through this
+ExLlamaV3/TabbyAPI stack. The quant is labeled for 24 GB while this recipe targets a 16 GB card; sufficient system RAM
+and CPU throughput are also required, and successful loading, fit, and performance are not guaranteed.
 
 TabbyAPI writes a random API key to `tabbyAPI/api_tokens.yml` on first start. Send it as
 `Authorization: Bearer <key>`:
@@ -134,26 +125,29 @@ curl -s http://127.0.0.1:8096/v1/chat/completions -H "Authorization: Bearer $KEY
   -d '{"model": "x", "messages": [{"role": "user", "content": "Write a haiku about VRAM."}], "max_tokens": 400}'
 ```
 
-Settings live in `tabbyAPI/config.yml` (copied from `serve/config.example.yml`). The server only listens on
-127.0.0.1; to use it from other devices over Tailscale, set `network.host` to the machine's Tailscale IP.
+The default Qwen settings live in `tabbyAPI/config.yml` (copied from `serve/config.example.yml`); the Ornith wrapper uses
+`serve/config.ornith.yml` without changing that default. The server only listens on 127.0.0.1; to use it from other
+devices over Tailscale, set `network.host` to the machine's Tailscale IP.
 TabbyAPI has a simple chat page at http://127.0.0.1:8096/ui/ (the startup log prints a link that logs you in);
 `serve/open-webui.md` sets up a fuller chat UI.
 
-Two other profiles use the model's built-in MTP head instead of the draft model: `serve/run_tabby_long.sh` (128k, no
-draft model needed, same VRAM limit as `CTX=128k`) and `serve/run_tabby_xl.sh` (160k context). Both are slower than the default.
+For Qwen, two other profiles use the model's built-in MTP head instead of the draft model: `serve/run_tabby_long.sh`
+(128k, no draft model needed, same VRAM limit as `CTX=128k`) and `serve/run_tabby_xl.sh` (160k context). Both are slower
+than the default.
 
 ## If something doesn't work
 
-`./triage.sh` collects what's needed to debug it (distro, kernel, GPU access, container runtime, recipe version, the
-last server and build logs, with anything that looks like an API key removed) and opens Claude Code, Codex or
+`./triage.sh` collects what's needed to debug it (distro, kernel, GPU access, recipe version, host install details,
+and the last server and build logs, with anything that looks like an API key removed) and opens Claude Code, Codex or
 OpenCode, whichever you have, with it. `./triage.sh "what you saw"` adds your own description; `./triage.sh --print`
-just writes the file for you to paste anywhere. `container/run.sh` offers it when it fails.
+just writes the file for you to paste anywhere.
 
 ### GPU hangs and wrong output
 
 A GPU hang resets the card: the server log shows `HW Exception ... GPU Hang`, the kernel log `amdgpu ... reset`, and a
 desktop on the same card restarts. Wrong output usually looks like a run of `!` (what greedy decoding picks when the
-logits are NaN) with none of the draft accepted. Neither has happened on the test machine at stock settings. In the one
+logits are NaN); on the Qwen draft profile, none of the draft is accepted. Neither has happened on the test machine with
+the Qwen profile at stock settings. In the one
 report so far ([#2](https://github.com/parth-thakre/exl3-rdna4-recipe/issues/2)), both came from an undervolt (-60 mV,
 power cap 275 W of 304 W) that games had run fine on for months. Its signs: hangs only during prefill, at prompt sizes
 that change from run to run, and wrong output before the first hang. If either happens to you, these tests narrow it
@@ -162,19 +156,19 @@ down. Hangs come and go, so give each test a few tries, and change one thing at 
 1. **Stock clocks and voltage:** undo any undervolt, overclock or power limit (LACT, CoreCtrl), and check it's still
    undone after a reboot, since a LACT profile applies at boot. A long prefill keeps the card at full load for minutes
    and can fail at settings games pass. When the card has a voltage or clock offset or a lowered power cap,
-   `container/run.sh` and `serve/run_tabby.sh` warn at start and, in a terminal, ask whether to continue
+   `serve/run_tabby.sh` and `serve/run_tabby_ornith.sh` warn at start and, in a terminal, ask whether to continue
    (`ALLOW_NOT_STOCK=1` skips the question). `./triage.sh --print` shows them too.
-2. **The patch's kernels at upstream's defaults:** `EXL3_TUNING=0 container/run.sh` (or `EXL3_TUNING=0
-   serve/run_tabby.sh`). Decode is slower, and greedy output is the same as plain upstream's, token for token. If the
-   problem stops, it's in our code.
+2. **The patch's kernels at upstream's defaults:** `EXL3_TUNING=0 serve/run_tabby.sh` (or
+   `EXL3_TUNING=0 serve/run_tabby_ornith.sh`). Decode is slower, and greedy output is the same as plain upstream's,
+   token for token. If the problem stops, it's in our code.
 3. **Nothing else on the card:** plug the monitor into the motherboard (most Ryzen 7000 and 9000 CPUs have an
    integrated GPU), or log out of the desktop and send requests over SSH.
-4. **Which kernel hangs:** `AMD_SERIALIZE_KERNEL=3 AMD_LOG_LEVEL=3 AMD_LOG_MASK=2097152 container/run.sh` runs one GPU
-   kernel at a time and logs each one's name (`ShaderName`), so the last name in `container/run.sh logs` before the hang
-   is the kernel that hung. The mask must be decimal. It's slow and the log grows fast, so use it for one reproduction.
+4. **Which kernel hangs:** run `AMD_SERIALIZE_KERNEL=3 AMD_LOG_LEVEL=3 AMD_LOG_MASK=2097152 serve/run_tabby.sh` (or
+   `serve/run_tabby_ornith.sh`) to run one GPU kernel at a time; the last kernel name (`ShaderName`) printed in the
+   terminal before the hang is the one that hung. The mask must be decimal. It's slow, so use it for one reproduction.
 
 For an issue, attach `./triage.sh --print` (it records which GPU runs the display, the clocks and overdrive table, the
-amdgpu settings and loaded firmware versions, recent amdgpu kernel errors and the container's settings) and the
+amdgpu settings and loaded firmware versions, recent amdgpu kernel errors and host install details) and the
 request that triggered it (prompt size, settings, whether it happens again). If the hang ended in a reboot and
 `triage.sh` couldn't read the previous boot's kernel log, add `sudo journalctl -k -b -1 | grep -iE 'amdgpu|kfd'`:
 the lines before the reset say which queue timed out.
