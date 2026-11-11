@@ -10,20 +10,100 @@
 #   setup/download_models.sh draft-mia  ready-made 5.0 bpw DFlash2 draft by Mia-AiLab (1.5 GB, no requant needed,
 #                                       but it leaves less room for context)
 #   setup/download_models.sh 2.5bpw     the 2.5 bpw main model, only for the GPQA/perplexity comparison
+#   setup/download_models.sh ornith     Ornith-1.5-35B-A3B EXL3 4.00 bpw (24 GB)
+# In a terminal, each selected model can instead be linked from an existing directory containing config.json and
+# safetensors weights. Non-interactive runs keep downloading as before.
 set -euo pipefail
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 MODELS_DIR=${MODELS_DIR:-models}
 DRAFT_DIR=${DRAFT_DIR:-$MODELS_DIR}
 VENV=${VENV:-$ROOT/.venv}
 [ -x "$VENV/bin/hf" ] && export PATH="$VENV/bin:$PATH"
-command -v hf >/dev/null || { echo "hf CLI not found; run setup/make_venv.sh first or pip install huggingface_hub" >&2; exit 1; }
 cd "$ROOT"
 
-# fetch REPO REVISION PATH: download, then leave .download-complete (the revision) in PATH, so an interrupted download
-# isn't mistaken for a finished one (container/run.sh checks it). Rerunning resumes and only fetches what's missing.
+use_existing_model() {
+    local target=$1 answer model_path target_parent target_path
+    if [ -L "$target" ]; then
+        if [ -f "$target/config.json" ] && compgen -G "$target/*.safetensors" >/dev/null; then
+            echo "Using existing model at $target"
+            return 0
+        fi
+        echo "Existing model link is incomplete: $target" >&2
+        exit 1
+    fi
+    [ -t 0 ] || return 1
+    read -r -p "Already have $(basename "$target") downloaded? [y/N] " answer || return 1
+    case "$answer" in
+        [yY]|[yY][eE][sS]) ;;
+        *) return 1 ;;
+    esac
+
+    read -r -p "Path to the existing model directory: " model_path || {
+        echo "Could not read the model directory." >&2
+        exit 1
+    }
+    [ -n "$model_path" ] || { echo "No model directory supplied." >&2; exit 1; }
+    case "$model_path" in
+        "~") model_path=$HOME ;;
+        "~/"*) model_path="$HOME/${model_path#~/}" ;;
+    esac
+    [[ "$model_path" = /* ]] || model_path="$PWD/$model_path"
+    model_path=$(cd "$model_path" 2>/dev/null && pwd -P) || {
+        echo "Model directory does not exist: $model_path" >&2
+        exit 1
+    }
+    [ -f "$model_path/config.json" ] && compgen -G "$model_path/*.safetensors" >/dev/null || {
+        echo "Expected config.json and at least one .safetensors weight in $model_path" >&2
+        exit 1
+    }
+
+    mkdir -p "$(dirname "$target")" || { echo "Could not create the model directory." >&2; exit 1; }
+    target_parent=$(cd "$(dirname "$target")" && pwd -P) || {
+        echo "Could not resolve the model directory: $target" >&2
+        exit 1
+    }
+    target_path="$target_parent/$(basename "$target")"
+    if [ "$model_path" = "$target_path" ]; then
+        echo "Model is already at $target"
+        return 0
+    fi
+    if [ -e "$target" ] || [ -L "$target" ]; then
+        echo "Refusing to replace existing model path: $target" >&2
+        exit 1
+    fi
+    ln -s "$model_path" "$target" || { echo "Could not link $model_path to $target" >&2; exit 1; }
+    echo "Using existing model: $target -> $model_path"
+}
+
+download_from_hf() {
+    local repo=$1 revision=$2 target=$3
+    command -v hf >/dev/null || {
+        echo "hf CLI not found; run setup/make_venv.sh first or pip install huggingface_hub" >&2
+        exit 1
+    }
+    if [ -n "$revision" ]; then
+        hf download "$repo" --revision "$revision" --local-dir "$target"
+    else
+        hf download "$repo" --local-dir "$target"
+    fi
+}
+
+# fetch REPO REVISION PATH: download, then write .download-complete (the revision) only after it finishes.
+# Rerunning resumes and only fetches what's missing.
 fetch() {
-    hf download "$1" --revision "$2" --local-dir "$3"
-    echo "$1@$2" > "$3/.download-complete"
+    local repo=$1 revision=$2 target=$3
+    if use_existing_model "$target"; then
+        return 0
+    fi
+    download_from_hf "$repo" "$revision" "$target"
+    echo "$repo@$revision" > "$target/.download-complete"
+}
+download_model() {
+    local repo=$1 revision=$2 target=$3
+    if use_existing_model "$target"; then
+        return 0
+    fi
+    download_from_hf "$repo" "$revision" "$target"
 }
 main() {
     # Branch SC_3.00bpw_H4 of turboderp's repo: self-calibrated 3.0 bpw with a 4-bit head (pinned to the tested commit)
@@ -31,7 +111,7 @@ main() {
 }
 main_plain() {
     # Branch 3.00bpw (commit 6fe61ad620abfe97c5b49f9722c2bceeea4ccc28 when tested)
-    hf download turboderp/Qwen3.8-27B-exl3 --revision 3.00bpw --local-dir "$MODELS_DIR/Qwen3.8-27B-EXL3-3.0bpw"
+    download_model turboderp/Qwen3.8-27B-exl3 3.00bpw "$MODELS_DIR/Qwen3.8-27B-EXL3-3.0bpw"
 }
 draft() {
     # setup/requant_draft.sh's output for incoai/Qwen3.8-27B-DFlash2 at 015e795, byte-identical to what we run
@@ -39,15 +119,20 @@ draft() {
 }
 draft_bf16() {
     # The DFlash2 draft (inco.ai / z-lab, Apache-2.0; mirrored at z-lab/Qwen3.8-27B-DFlash2), at the revision we converted
-    hf download incoai/Qwen3.8-27B-DFlash2 --revision 015e795645c74b1a0eeef3b570031fb62e769bc5 \
-        --local-dir "$MODELS_DIR/Qwen3.8-27B-DFlash2-bf16"
+    download_model incoai/Qwen3.8-27B-DFlash2 015e795645c74b1a0eeef3b570031fb62e769bc5 \
+        "$MODELS_DIR/Qwen3.8-27B-DFlash2-bf16"
 }
 draft_mia() {
-    hf download Mia-AiLab/Qwen3.8-27B-DFlash2-EXL3-5.0bpw --local-dir "$MODELS_DIR/Qwen3.8-27B-DFlash2-EXL3-5.0bpw"
+    download_model Mia-AiLab/Qwen3.8-27B-DFlash2-EXL3-5.0bpw "" \
+        "$MODELS_DIR/Qwen3.8-27B-DFlash2-EXL3-5.0bpw"
 }
 main_25() {
     # Branch 2.50bpw (commit 0cd1091272291d008e06976acb81e25946cdc767 when tested)
-    hf download turboderp/Qwen3.8-27B-exl3 --revision 2.50bpw --local-dir "$MODELS_DIR/Qwen3.8-27B-EXL3-2.5bpw"
+    download_model turboderp/Qwen3.8-27B-exl3 2.50bpw "$MODELS_DIR/Qwen3.8-27B-EXL3-2.5bpw"
+}
+ornith() {
+    fetch JRamirez-UAB/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB ac1d94ac17373eaea6818cd815591d003177916b \
+        "$MODELS_DIR/Ornith-1.5-35B-A3B-EXL3-4.00bpw-24GB"
 }
 
 case ${1:-default} in
@@ -58,5 +143,6 @@ case ${1:-default} in
     draft-bf16) draft_bf16 ;;
     draft-mia)  draft_mia ;;
     2.5bpw)     main_25 ;;
-    *) echo "usage: $0 [main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw]" >&2; exit 2 ;;
+    ornith)     ornith ;;
+    *) echo "usage: $0 [main|draft|3.0bpw-plain|draft-bf16|draft-mia|2.5bpw|ornith]" >&2; exit 2 ;;
 esac

@@ -1,4 +1,4 @@
-# GPU settings check, sourced by container/run.sh, serve/run_tabby.sh and triage.sh. An undervolt or power limit that
+# GPU settings check, sourced by serve/run_tabby.sh and triage.sh. An undervolt or power limit that
 # games run fine on can still hang a long prefill or turn the output into NaN (issue #2: -60 mV and a 275 W cap of
 # 304 W), so the launchers warn before serving. Reads sysfs only; no root needed.
 
@@ -23,7 +23,7 @@ gpu_not_stock() {
 }
 
 # gpu_stock_warning <script name>: warn on stderr if any GPU isn't at stock settings. In a terminal, ask whether to
-# continue and return 1 on no; otherwise (the container, a service) only warn. ALLOW_NOT_STOCK=1 skips the question.
+# continue and return 1 on no; otherwise (a non-interactive service) only warn. ALLOW_NOT_STOCK=1 skips the question.
 gpu_stock_warning() {
     local n ans; n=$(gpu_not_stock)
     [ -n "$n" ] || return 0
