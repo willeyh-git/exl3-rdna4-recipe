@@ -1,8 +1,24 @@
-# Qwen3.8-27B on a 16 GB RX 9070 XT: ExLlamaV3 + TabbyAPI
+# MoE on a tuned RDNA4 engine
 
-Run Qwen3.8-27B (EXL3, 3.0 bpw: turboderp's self-calibrated `SC_3.00bpw_H4` quant) on an AMD RX 9070 XT or RX 9070
-under Linux as a local OpenAI-compatible server for coding agents and chat. It uses upstream [ExLlamaV3](https://github.com/turboderp-org/exllamav3) and
-[TabbyAPI](https://github.com/theroyallab/tabbyAPI) with our RDNA4 patches on top, and a DFlash2 draft model for
+This repo is an exploration of running MoE on the RDNA4 tuned engine.
+All findings are from testing on CachyOS with a Ryzen 7 5700X3D, 32 GB DDR4-3200 RAM, and an AMD Radeon RX 9070 XT (16 GB).
+
+## Measured Ornith DFlash2 sweep
+
+The chart summarizes the measured host results. For each explicitly labelled `ornith-dflash2-dtokens-N` setting, it
+shows median prefill and decode speed plus median draft acceptance from the latest complete three-repeat sweep at each
+prompt target. The no-draft run is a prefill/decode speed reference; draft acceptance is not applicable. Unsuffixed
+`ornith-dflash2` records are omitted because their labels do not identify the draft-token count. Runs used a 128K cache,
+Q8 main cache, `cpu_moe_split_experts: 100`, and Q4 draft cache; actual prompt lengths were about 1.5K, 7.7K, 15.9K,
+and 32.2K tokens. These results describe the CachyOS host and configuration above, not a general performance guarantee.
+
+![Ornith DFlash2 prefill and decode speed and draft acceptance by draft-token count and prompt context](bench/ornith_dflash2_benchmark.png)
+
+## Default Qwen and optional Ornith profiles
+
+The default profile runs Qwen3.8-27B (EXL3, 3.0 bpw: turboderp's self-calibrated `SC_3.00bpw_H4` quant) as a local
+OpenAI-compatible server for coding agents and chat. It uses upstream [ExLlamaV3](https://github.com/turboderp-org/exllamav3)
+and [TabbyAPI](https://github.com/theroyallab/tabbyAPI) with our RDNA4 patches on top, and a DFlash2 draft model for
 speculative decoding.
 
 An optional Ornith-1.5-35B-A3B host profile configures TabbyAPI's CPU MoE expert splitting. It is an unverified starting
@@ -27,14 +43,16 @@ point: the quant is labeled for 24 GB, and compatibility and fit on the 16 GB RX
 
 Speeds are typical for an RX 9070 XT and depend on the content.
 
-This is an independent project, not affiliated with or endorsed by ExLlamaV3, TabbyAPI, DFlash2 or Qwen. It has been
-tested on one machine:
+This is an independent project, not affiliated with or endorsed by ExLlamaV3, TabbyAPI, DFlash2 or Qwen. The measured
+results above are from this test machine:
 
 | | |
 |---|---|
-| GPU | AMD RX 9070 XT, 16 GB (gfx1201) |
-| OS | Fedora 44, kernel 7.2 (install also tested in Ubuntu 24.04 and Arch containers, see Requirements) |
-| ROCm | system ROCm 7.1.1 (Fedora packages) to build; PyTorch 2.13.0 + ROCm 7.2 wheels to run |
+| OS | CachyOS |
+| CPU | AMD Ryzen 7 5700X3D |
+| Memory | 32 GB DDR4-3200 |
+| GPU | AMD Radeon RX 9070 XT, 16 GB (gfx1201) |
+| Runtime | Python 3.12; PyTorch 2.13.0 + ROCm 7.2 wheels |
 | Upstream | ExLlamaV3 v1.6.6 (bd1f519), TabbyAPI `main` a3fed43 |
 
 ## What we added on top of upstream
@@ -56,11 +74,11 @@ tested on one machine:
 ## Requirements (host install)
 
 - AMD RX 9070 XT or RX 9070 (gfx1201, 16 GB). Only the 9070 XT has been tested.
-- Linux with a ROCm HIP SDK (compiler, HIP headers and the math libraries' headers); ROCm 7.1.1 and 7.2.4 tested. The
-  server runs on Fedora 44 with its own ROCm 7.1.1 packages. The install was also tested end to end in Ubuntu 24.04 and
-  Arch containers with ROCm 7.2.4 in `/opt/rocm`, on the same GPU: same greedy output as the Fedora build
-  (`notes/research-log.md`). The scripts find ROCm through `hipconfig` (or set `ROCM_PATH`), and
-  `setup/fetch_deps.sh` checks the headers and prints the missing packages for your distro.
+- Linux with a ROCm HIP SDK (compiler, HIP headers and the math libraries' headers); ROCm 7.1.1 and 7.2.4 have been used
+  for build/setup checks. All model-performance findings documented here are from the CachyOS host above; the distro
+  package instructions below are setup guidance, not separate performance results. The scripts find ROCm through
+  `hipconfig` (or set `ROCM_PATH`), and `setup/fetch_deps.sh` checks the headers and prints the missing packages for your
+  distro.
   - Fedora: `sudo dnf install rocm-hip-devel rocm-runtime-devel hipcc rocm-clang-devel rocm-llvm-devel rocm-comgr-devel
     rocm-libc++-devel rocblas-devel hipblas-devel hipblas-common-devel rocminfo rocm-smi gcc gcc-c++ python3.12 git curl`
     (`setup/fetch_deps.sh` fetches the remaining -devel headers without sudo)
@@ -144,17 +162,6 @@ The DFlash2 launcher selects the converted model as a separate draft (7 tokens, 
 Qwen draft or the target's built-in MTP. Start with the short 8k context and one request, then compare against
 `serve/run_tabby_ornith.sh`. The draft checkpoint's upstream serving benchmarks use different hardware and do not
 predict performance on this ROCm setup.
-
-### Measured Ornith DFlash2 draft sweep
-
-The chart below summarizes the supplied host measurements. For each explicitly labelled `ornith-dflash2-dtokens-N`
-setting, it shows median prefill and decode speed plus median draft acceptance from the latest complete three-repeat
-sweep at each prompt target. The no-draft run is a prefill/decode speed reference; draft acceptance is not applicable.
-Unsuffixed `ornith-dflash2` records are omitted because their labels do not identify the draft-token count. Runs used the reported
-128K cache, Q8 main cache, `cpu_moe_split_experts: 100`, and Q4 draft cache; actual prompt lengths were about 1.5K,
-7.7K, 15.9K, and 32.2K tokens. These results describe one host and configuration, not a general performance guarantee.
-
-![Ornith DFlash2 prefill and decode speed and draft acceptance by draft-token count and prompt context](bench/ornith_dflash2_benchmark.png)
 
 TabbyAPI writes a random API key to `tabbyAPI/api_tokens.yml` on first start. Send it as
 `Authorization: Bearer <key>`:
