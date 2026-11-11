@@ -14,6 +14,57 @@ and 32.2K tokens. These results describe the CachyOS host and configuration abov
 
 ![Ornith DFlash2 prefill and decode speed and draft acceptance by draft-token count and prompt context](bench/ornith_dflash2_benchmark.png)
 
+## PolyStrata Ornith benchmark reference
+
+These separately supplied [PolyStrata](https://github.com/simplexai-labs/PolyStrata) results use
+`ornith-1.5-35b-a3b-apex-i-quality` (`qwen35moe`, `APEX-MTP-I-Quality`) with a reported context of `131072` tokens
+(128K). This is a different checkpoint and serving engine from this repository's EXL3 Ornith profile. The model is
+similar in broad size/quant class and the configured context is the same, but prompt lengths and benchmark protocols
+differ; these figures are a reference, not a controlled head-to-head comparison.
+
+### PolyStrata cold benchmark
+
+The run used `polystrata.py benchmark` with `--prompt-tokens 2000,8000,16000,32000` and `--max-tokens 256`. The
+`tokens in` column preserves the actual input-token counts printed by the tool; those counts differ from the requested
+targets. Values for cache hits and MTP right are shown as reported.
+
+| Case (requested target) | Actual input tokens | Output tokens | TTFT (s) | Prefill (tok/s) | Decode (tok/s) |
+|---|---:|---:|---:|---:|---:|
+| Short | 21 | 256 | 0.288 | 78.2 | 89.5 |
+| Long (2K) | 2,952 | 256 | 2.116 | 1,462.5 | 91.5 |
+| Long (8K) | 10,420 | 250 | 4.810 | 1,781.5 | 98.1 |
+| Long (16K) | 21,548 | 256 | 8.551 | 1,569.3 | 89.1 |
+| Long (32K) | 42,433 | 256 | 21.930 | 1,189.9 | 77.3 |
+
+| Case | Cache hits | MTP right | RAM (GiB) | CPU (%) |
+|---|---:|---:|---:|---:|
+| Short | 0.772 | 0.805 | 2.89 | 47.9 |
+| Long (2K) | 0.799 | 0.776 | 2.91 | 46.2 |
+| Long (8K) | 0.881 | 0.804 | 3.16 | 30.4 |
+| Long (16K) | 0.916 | 0.729 | 3.29 | 20.9 |
+| Long (32K) | 0.915 | 0.747 | 3.41 | 13.5 |
+
+The cold benchmark output did not report VRAM use or GPU utilization (`-` in both columns).
+
+### Strata tool results
+
+The separate tool run measured short chat, three fresh prompts at each listed context (24 new tokens), and a repeated
+agent session. Values below are medians with the supplied ranges; `n` is the number of measurements.
+
+| Workload | Actual prompt tokens | Prefill tok/s (median [range], n) | First token (s; median [range], n) | Decode tok/s (median [range], n) |
+|---|---:|---:|---:|---:|
+| Chat (three short questions, three runs; up to 100 new tokens) | — | — | 0.29 [0.25–0.31], n=9 | 96.90 [84.50–102.70], n=9 |
+| Fresh prompt (4K target) | 4,019 | 2,003.80 [1,993.20–2,013.50], n=3 | 2.04 [2.03–2.04], n=3 | — |
+| Fresh prompt (16K target) | 16,058 | 2,224.80 [2,223.70–2,242.10], n=3 | 7.24 [7.19–7.24], n=3 | — |
+| Fresh prompt (32K target) | 32,049 | 1,824.40 [1,805.70–1,824.80], n=3 | 17.60 [17.59–17.78], n=3 | — |
+
+| Agent-session metric | Median [range] | n |
+|---|---:|---:|
+| Cache hit (%) | 68.60 [68.60–68.60] | 3 |
+| Re-read tokens per session | 249 [236–255] | 3 |
+| Turn first token (s) | 2.30 [1.76–2.68] | 15 |
+| Decode (tok/s) | 92.40 [80.60–103.80] | 15 |
+
 ## Default Qwen and optional Ornith profiles
 
 The default profile runs Qwen3.8-27B (EXL3, 3.0 bpw: turboderp's self-calibrated `SC_3.00bpw_H4` quant) as a local
