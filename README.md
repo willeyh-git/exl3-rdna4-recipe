@@ -75,6 +75,11 @@ speculative decoding.
 An optional Ornith-1.5-35B-A3B host profile configures TabbyAPI's CPU MoE expert splitting. It is an unverified starting
 point: the quant is labeled for 24 GB, and compatibility and fit on the 16 GB RX 9070 XT are not guaranteed.
 
+> [!WARNING]
+> CPU MoE expert splitting requires a quant with `MUL1` routed experts. The Gemma 4 26B-A4B 4.10 bpw checkpoint
+> examined here does not use `MUL1`; ExLlamaV3 reports `experts are not mul1, CPU split skipped`, so CPU splitting
+> does not work with that quant. Check startup logs before relying on system-RAM expert offload with any model.
+
 ## What you get
 
 - **Code, one request:** ~150 tok/s at short context, ~105 tok/s at 120k.
