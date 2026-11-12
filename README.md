@@ -65,7 +65,7 @@ agent session. Values below are medians with the supplied ranges; `n` is the num
 | Turn first token (s) | 2.30 [1.76–2.68] | 15 |
 | Decode (tok/s) | 92.40 [80.60–103.80] | 15 |
 
-## Default Qwen and optional Ornith profiles
+## Default Qwen and optional host profiles
 
 The default profile runs Qwen3.8-27B (EXL3, 3.0 bpw: turboderp's self-calibrated `SC_3.00bpw_H4` quant) as a local
 OpenAI-compatible server for coding agents and chat. It uses upstream [ExLlamaV3](https://github.com/turboderp-org/exllamav3)
@@ -74,6 +74,11 @@ speculative decoding.
 
 An optional Ornith-1.5-35B-A3B host profile configures TabbyAPI's CPU MoE expert splitting. It is an unverified starting
 point: the quant is labeled for 24 GB, and compatibility and fit on the 16 GB RX 9070 XT are not guaranteed.
+
+An optional Gemma 4 26B-A4B-it profile uses the `turboderp/gemma-4-26B-A4B-it-exl3` 4.10 bpw checkpoint. It is pinned
+to a fixed Hugging Face revision and uses an 8K context, CPU MoE expert splitting, vision offload, and no speculative
+draft. Its checkpoint is about 16.9 GB on disk; this starting profile has not been load-tested on the target GPU, and
+fit, speed, and system RAM/CPU requirements are not guaranteed.
 
 ## What you get
 
@@ -141,7 +146,8 @@ results above are from this test machine:
 - Python 3.12, the version we tested.
 - Your user in the `render` group (access to `/dev/kfd` and `/dev/dri/renderD*`).
 - About 20 GB of disk for the default Qwen models and 15 GB for the Python environment. The optional Ornith quant is
-  labeled 24 GB; allow at least that much additional space if you download it.
+  labeled 24 GB and the Gemma 4 4.10 bpw checkpoint is about 16.9 GB; allow that additional space for whichever model
+  you download.
 - Nothing else on the GPU while serving: the server uses almost all of the 16 GB.
 
 ## Install
@@ -158,6 +164,9 @@ setup/download_models.sh     # Qwen3.8-27B EXL3 3.0 bpw SC H4 (13.4 GB) + the 3.
 
 The default download and launcher remain Qwen. To fetch the optional Ornith quant as well, run
 `setup/download_models.sh ornith`; this does not change the default model or config.
+
+To fetch the optional Gemma 4 4.10 bpw checkpoint (or link it from the interactive local-model list), run
+`setup/download_models.sh gemma4`. This does not change the default model or config.
 
 With the Ornith target present (from `setup/download_models.sh ornith` or a linked local model), prepare the separate
 DFlash2 draft by downloading its BF16 checkpoint and converting it to EXL3 (the conversion uses the GPU):
@@ -200,6 +209,7 @@ serve/run_tabby.sh           # http://127.0.0.1:8096/v1, 96k context
 CTX=128k serve/run_tabby.sh  # 128k: nothing else (or only a light desktop, ~1 GB) on the GPU
 serve/run_tabby_ornith.sh    # optional Ornith profile: 8k context, one request
 serve/run_tabby_ornith_dflash2.sh # optional Ornith profile with external DFlash2 draft
+serve/run_tabby_gemma4.sh   # optional Gemma 4 profile: 8k context, one request
 serve/stop_tabby.sh
 ```
 
@@ -208,6 +218,11 @@ system RAM and dynamically retaining hot experts in VRAM. A prior user run loade
 built-in MTP; the optional external DFlash2 conversion and launcher have not been tested on the target hardware. The
 quant is labeled for 24 GB while this recipe targets a 16 GB card; the external draft adds memory pressure, and
 sufficient system RAM and CPU throughput are also required. Successful loading and performance are not guaranteed.
+
+The Gemma 4 profile sets `cpu_moe_split_experts: 64` for its 128 experts per layer, uses a Q4 cache, keeps vision
+weights in system RAM, and disables speculative drafting. These are conservative test settings, not measured tuning.
+The checkpoint's approximately 16.9 GB disk size does not include runtime buffers, vision weights, or the KV cache;
+available system RAM and CPU throughput matter, and a successful load on a 16 GB GPU is not guaranteed.
 
 The DFlash2 launcher selects the converted model as a separate draft (7 tokens, Q4 draft cache); it does not use the
 Qwen draft or the target's built-in MTP. Start with the short 8k context and one request, then compare against
